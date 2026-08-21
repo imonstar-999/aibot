@@ -32,7 +32,6 @@ export async function POST(request: Request) {
 			typeof body === "object" && body !== null && "messages" in body
 				? (body as { messages: unknown }).messages
 				: undefined;
-
 		if (
 			!Array.isArray(messages) ||
 			messages.length === 0 ||
@@ -45,11 +44,11 @@ export async function POST(request: Request) {
 		}
 
 		const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-		const completion = await openai.chat.completions.create({
-			model: "gpt-4o-mini",
-			messages,
+		const response = await openai.responses.create({
+			model: "gpt-5.4-mini",
+			input: messages,
 		});
-		const message = completion.choices[0]?.message?.content;
+		const message = response.output_text;
 
 		if (!message) {
 			return NextResponse.json(
@@ -59,7 +58,7 @@ export async function POST(request: Request) {
 		}
 
 		return NextResponse.json({ message });
-	} catch {
+	} catch(error) {
 		return NextResponse.json(
 			{ error: "Unable to complete the chat request." },
 			{ status: 500 },
