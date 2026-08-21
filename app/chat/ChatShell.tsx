@@ -14,20 +14,50 @@ const starterPrompts = [
 export default function ChatShell() {
 	const [input, setInput] = useState("");
 	const [messages, setMessages] = useState<Message[]>([]);
+	const [isLoading, setIsLoading] = useState(false);
+	const [error, setError] = useState("");
 
-	function sendMessage(event: FormEvent<HTMLFormElement>) {
+	async function sendMessage(event: FormEvent<HTMLFormElement>) {
 		event.preventDefault();
 		const text = input.trim();
-		if (!text) return;
-		setMessages((current) => [
-			...current,
-			{ role: "user", text },
-			{
-				role: "morrow",
-				text: "I’m with you. Let’s make this feel a little clearer, one piece at a time.",
-			},
-		]);
+		if (!text || isLoading) return;
+
+		const nextMessages = [...messages, { role: "user" as const, text }];
+		setMessages(nextMessages);
 		setInput("");
+		setError("");
+		setIsLoading(true);
+
+		try {
+			const response = await fetch("/api/chat", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					messages: nextMessages.map((message) => ({
+						role: message.role === "morrow" ? "assistant" : "user",
+						content: message.text,
+					})),
+				}),
+			});
+			const result: { message?: string; error?: string } = await response.json();
+
+			if (!response.ok || !result.message) {
+				throw new Error(result.error ?? "Unable to complete the chat request.");
+			}
+
+			setMessages((current) => [
+				...current,
+				{ role: "morrow", text: result.message as string },
+			]);
+		} catch (requestError) {
+			setError(
+				requestError instanceof Error
+					? requestError.message
+					: "Unable to complete the chat request.",
+			);
+		} finally {
+			setIsLoading(false);
+		}
 	}
 
 	return (
@@ -145,6 +175,12 @@ export default function ChatShell() {
 									{message.text}
 								</div>
 							))}
+							{isLoading && (
+								<div className="max-w-[85%] rounded-2xl rounded-bl-sm bg-[#f0f7f1] px-5 py-4 text-sm leading-6 text-[var(--ink-muted)]">
+									Thinking...
+								</div>
+							)}
+							{error && <p className="text-sm text-[var(--coral)]">{error}</p>}
 						</div>
 					)}
 					<form
@@ -154,6 +190,7 @@ export default function ChatShell() {
 						<div className="flex items-end gap-3">
 							<textarea
 								value={input}
+								disabled={isLoading}
 								onChange={(event) => setInput(event.target.value)}
 								onKeyDown={(event) => {
 									if (event.key === "Enter" && !event.shiftKey) {
@@ -168,6 +205,7 @@ export default function ChatShell() {
 							<button
 								type="submit"
 								aria-label="Send message"
+								disabled={isLoading}
 								className="mb-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--coral)] text-xl text-white transition-transform hover:-translate-y-0.5"
 							>
 								↗
